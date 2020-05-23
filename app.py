@@ -9,6 +9,8 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 
+import base64
+
 import matplotlib.pyplot as plt
 plt.switch_backend('Agg')
 
@@ -23,6 +25,16 @@ import torch.nn as nn
 
 from PIL import Image
 
+import flask
+
+# from flask.ext.cache import Cache
+
+# cache = Cache(app.server, config={
+# 'CACHE_TYPE': 'simple'
+# })
+
+# cache.clear()
+
 
 # Contains CSS info on how to style the different elements in your dashboard
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -36,6 +48,8 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets,
                assets_folder='/Users/roshansk/Documents/Projects/CovidImaging/assets',
                assets_url_path='/',
                include_assets_files = False)
+
+
 
 app.layout = html.Div(children=[
     html.H1(children='DL Net Visualizer'),
@@ -68,8 +82,14 @@ app.layout = html.Div(children=[
         ],className='three columns container', style = containerStyle),
         
         html.Div([
-            html.Img(id='image', src = 'arr.jpg')
-        ], className = 'nine columns container-display' )
+            html.Img(id='image', src = 'arr.jpg', style ={'height':'80%'})
+            
+        ], className = 'nine columns ' ),
+        
+        
+        html.Div(id='testOut')
+        
+        
         
         
     ])
@@ -114,6 +134,12 @@ def update_model_options(nClicks, modelFolderInput, imageFolderInput):
         for i in fileList:
             if '.jpg' in i or '.png' in i or 'jpeg' in i:
                 imgOptions.append({'label':i, 'value':i})
+                
+    folder = os.path.join(os.getcwd(),'actData')
+    fileList = os.listdir(folder)
+    for i in range(len(fileList)):
+        os.system(f"rm {os.path.join(folder,fileList[i])}")
+        
     
     
     return modelOptions, imgOptions
@@ -136,7 +162,10 @@ def update_activations(nClicks, model, image, modelFolder, imageFolder):
     if nClicks == 0:
         return [{'value':1,'label':2},{'value':2,'label':3}]
 
-    
+    folder = os.path.join(os.getcwd(),'actData')
+    fileList = os.listdir(folder)
+    for i in range(len(fileList)):
+        os.system(f"rm {os.path.join(folder,fileList[i])}")
 
     print("HERE!!!")
     
@@ -172,7 +201,7 @@ def update_activations(nClicks, model, image, modelFolder, imageFolder):
                 x= x.view(x.size(0),-1)
                 
                 
-    outFile = os.path.join(os.getcwd(),'assets')
+    outFile = os.path.join(os.getcwd(),'actData')
     pickleFile = open( os.path.join(outFile,"activationData.pkl" ), "wb")
     pickle.dump(activations, pickleFile)
     pickleFile.close()
@@ -196,12 +225,12 @@ def displayFigure(layerInput):
         return None
     
     print(layerInput)
-    filename = os.path.join(os.getcwd(),'assets', f"act_{layerInput}.jpg")
+    filename = os.path.join(os.getcwd(),'actData', f"act_{layerInput}.jpg")
 
     if os.path.exists(filename):
         return f"act_{layerInput}.jpg"
     else:
-        pickleFile = os.path.join(os.getcwd(),'assets','activationData.pkl')
+        pickleFile = os.path.join(os.getcwd(),'actData','activationData.pkl')
         activationData = pickle.load( open( pickleFile, "rb" ) )
 
         act = activationData[layerInput].squeeze(0)
@@ -213,20 +242,35 @@ def displayFigure(layerInput):
                 plt.subplot(6,6,i*6 + j + 1)
                 plt.imshow(act[i*6 + j, : , :], cmap='gray')
                 plt.axis('off')
+                
+                
+        
 
-        filename = os.path.join(os.getcwd(),'assets', f"act_{layerInput}.jpg")
+        filename = os.path.join(os.getcwd(),'actData', f"act_{layerInput}.jpg")
         plt.savefig(filename, bbox_inches='tight', pad_inches = 0)
         plt.close()
+        
 
-        return f"act_{layerInput}.jpg"
+        encoded_image = base64.b64encode(open(filename, 'rb').read())
+        
+        src='data:image/jpg;base64,{}'.format(encoded_image.decode())
+
+        return src
 
 
 
+@app.callback(
+    Output('testOut', 'children'),
+    [Input('initButton', 'n_clicks')])
+def update_outout(value):
+    print((flask.request.cookies))
+    return value
+    
 
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True,dev_tools_hot_reload = False)
+    app.run_server(debug=True, dev_tools_hot_reload = False, port=9000)
 
 # @app.callback(
 #     dash.dependencies.Output('image', 'src'),
